@@ -1,0 +1,6 @@
+{
+  "name": "Spendapul Competition",
+  "description": "Pusat Informasi & Pendaftaran Acara Gratis SMP Negeri 2 Pulung — Try Out TKA SD & Kompetisi Mobile Legends.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
