@@ -126,6 +126,12 @@ async function startServer() {
     });
   }
 
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    next();
+  });
+
   app.use(express.json({ limit: '6mb' }));
 
   // Ensure DB initialized
@@ -851,7 +857,14 @@ async function startServer() {
 
   app.post('/api/admin/config', requireAuth(['ADMIN']), async (req: AuthedRequest, res) => {
     const actor = req.userSession!.username;
-    const patch = req.body as Partial<EventConfig>;
+    const rawPatch = { ...(req.body as Record<string, unknown>) };
+    delete rawPatch.count_to_active;
+    delete rawPatch.count_to_verified;
+    delete rawPatch.count_ml_active;
+    delete rawPatch.count_ml_verified;
+    delete rawPatch.remaining_to;
+    delete rawPatch.remaining_ml;
+    const patch = rawPatch as Partial<EventConfig>;
 
     const updated = await withDbLock((db) => {
       db.config = {

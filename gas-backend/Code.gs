@@ -128,6 +128,7 @@ var SHEET_HEADERS = {
 };
 
 var TEXT_COLS = {
+  value: true,
   nisn: true,
   wa_ortu: true,
   wa_kapten: true,
@@ -1764,12 +1765,23 @@ function handleConfigUpdate_(body, session) {
   return withLock_(function () {
     var ss = getSpreadsheet_();
     var current = readConfig_(ss);
-    var patch = body.patch || body;
+    var patch = cloneObj_(body.patch || body || {});
 
-    // Bersihkan properti routing internal
-    delete patch.action;
-    delete patch.proxy_key;
-    delete patch.token;
+    // Bersihkan properti routing internal & statistik turunan (PublicConfig)
+    var ignoredKeys = [
+      'action',
+      'proxy_key',
+      'token',
+      'count_to_active',
+      'count_to_verified',
+      'count_ml_active',
+      'count_ml_verified',
+      'remaining_to',
+      'remaining_ml',
+    ];
+    for (var d = 0; d < ignoredKeys.length; d++) {
+      delete patch[ignoredKeys[d]];
+    }
 
     var next = cloneObj_(current);
     var keys = Object.keys(patch);
@@ -1777,10 +1789,23 @@ function handleConfigUpdate_(body, session) {
       next[keys[i]] = patch[keys[i]];
     }
 
-    next.quota_to = Number(next.quota_to || 200);
-    next.quota_ml = Number(next.quota_ml || 32);
+    var trimLines = function (arr, fallback) {
+      if (!Array.isArray(arr)) return fallback;
+      return arr
+        .map(function (s) { return String(s === null || s === undefined ? '' : s).trim(); })
+        .filter(function (s) { return s.length > 0; });
+    };
+
+    next.quota_to = Number(next.quota_to !== undefined && next.quota_to !== null ? next.quota_to : 200);
+    next.quota_ml = Number(next.quota_ml !== undefined && next.quota_ml !== null ? next.quota_ml : 32);
     next.to_room_capacity = Number(next.to_room_capacity || 25);
     next.wa_panitia = normalizeWa_(next.wa_panitia || '6281234567890');
+    next.to_subjects = trimLines(next.to_subjects, current.to_subjects);
+    next.to_requirements = trimLines(next.to_requirements, current.to_requirements);
+    next.ml_format = trimLines(next.ml_format, current.ml_format);
+    next.ml_rules_summary = trimLines(next.ml_rules_summary, current.ml_rules_summary);
+    if (!Array.isArray(next.alur_steps)) next.alur_steps = current.alur_steps;
+    if (!Array.isArray(next.juknis_pdfs)) next.juknis_pdfs = current.juknis_pdfs;
 
     writeConfig_(ss, next);
     addAuditLog_(ss, session.username, 'CONFIG_UPDATE', 'Config', 'Memperbarui pengaturan & tampilan acara');
@@ -2191,7 +2216,10 @@ function writeTable_(ss, sheetName, rows) {
   if (lastRow > 1) {
     sheet.getRange(2, 1, lastRow - 1, headers.length).clearContent();
   }
-  if (!rows || rows.length === 0) return;
+  if (!rows || rows.length === 0) {
+    SpreadsheetApp.flush();
+    return;
+  }
 
   var matrix = rows.map(function (obj) {
     return headers.map(function (h) {
@@ -2204,6 +2232,7 @@ function writeTable_(ss, sheetName, rows) {
     });
   });
   sheet.getRange(2, 1, matrix.length, headers.length).setValues(matrix);
+  SpreadsheetApp.flush();
 }
 
 function appendRow_(ss, sheetName, obj) {
@@ -2216,6 +2245,7 @@ function appendRow_(ss, sheetName, obj) {
     return val;
   });
   sheet.appendRow(row);
+  SpreadsheetApp.flush();
 }
 
 function readConfig_(ss) {
@@ -2229,12 +2259,17 @@ function readConfig_(ss) {
     if (typeof defaults[k] === 'boolean') {
       result[k] = toBool_(raw);
     } else if (typeof defaults[k] === 'number') {
-      result[k] = Number(raw || defaults[k]);
+      var parsedNum = raw !== '' && raw !== null && raw !== undefined ? Number(raw) : NaN;
+      result[k] = isNaN(parsedNum) ? defaults[k] : parsedNum;
     } else if (Array.isArray(defaults[k])) {
-      try {
-        result[k] = typeof raw === 'string' && raw ? JSON.parse(raw) : defaults[k];
-      } catch (e) {
-        result[k] = defaults[k];
+      if (Array.isArray(raw)) {
+        result[k] = raw;
+      } else {
+        try {
+          result[k] = typeof raw === 'string' && raw ? JSON.parse(raw) : defaults[k];
+        } catch (e) {
+          result[k] = defaults[k];
+        }
       }
     } else {
       result[k] = raw === null || raw === undefined ? '' : String(raw);

@@ -17,9 +17,11 @@ function checkRateLimit(key: string, maxRequests: number, windowMs: number): boo
 function sendJson(res: ServerResponse, status: number, payload: unknown, cacheControl?: string) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (cacheControl) {
-    res.setHeader('Cache-Control', cacheControl);
-  }
+  res.setHeader(
+    'Cache-Control',
+    cacheControl || 'no-store, no-cache, must-revalidate, max-age=0',
+  );
+  res.setHeader('Pragma', 'no-cache');
   res.end(JSON.stringify(payload));
 }
 
@@ -54,11 +56,11 @@ async function readRawBody(req: IncomingMessage, maxBytes = 4_500_000): Promise<
 }
 
 const GET_ACTION_MAP: Record<string, { action: string; cache?: string }> = {
-  'config-public': { action: 'config_public', cache: 's-maxage=60, stale-while-revalidate=120' },
-  content: { action: 'content', cache: 's-maxage=180, stale-while-revalidate=300' },
-  'peserta-public': { action: 'peserta_public', cache: 's-maxage=60, stale-while-revalidate=120' },
-  bracket: { action: 'bracket', cache: 's-maxage=30, stale-while-revalidate=60' },
-  hasil: { action: 'hasil', cache: 's-maxage=120, stale-while-revalidate=240' },
+  'config-public': { action: 'config_public' },
+  content: { action: 'content' },
+  'peserta-public': { action: 'peserta_public' },
+  bracket: { action: 'bracket' },
+  hasil: { action: 'hasil' },
   'auth/me': { action: 'me' },
   'internal/stats': { action: 'stats' },
   'internal/to': { action: 'list_to' },
@@ -268,10 +270,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const mapping = GET_ACTION_MAP[route];
       const target = new URL(gasUrl);
       target.searchParams.set('action', mapping.action);
+      target.searchParams.set('_ts', String(Date.now()));
       if (proxyKey) target.searchParams.set('proxy_key', proxyKey);
       if (token) target.searchParams.set('token', token);
 
-      const gasRes = await fetch(target.toString(), { method: 'GET', redirect: 'follow' });
+      const gasRes = await fetch(target.toString(), {
+        method: 'GET',
+        cache: 'no-store',
+        redirect: 'follow',
+      });
       const gasJson = await gasRes.json().catch(() => null);
       if (!gasJson) return fail(res, 'GAS_BAD_RESPONSE', 'Respons GAS tidak valid.', 502);
 

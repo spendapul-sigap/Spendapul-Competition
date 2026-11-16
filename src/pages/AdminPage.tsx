@@ -52,6 +52,7 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
   const [section, setSection] = useState<ContentSection>('pengumuman');
   const [content, setContent] = useState<PublicContent | null>(null);
   const [config, setConfig] = useState<EventConfig | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
   const [users, setUsers] = useState<UserAccountPublic[]>([]);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [toList, setToList] = useState<PesertaTO[]>([]);
@@ -1544,12 +1545,17 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (savingConfig) return;
+              setSavingConfig(true);
               try {
-                await api.updateConfig(config);
+                const updated = await api.updateConfig(config);
+                setConfig((prev) => (prev ? { ...prev, ...updated } : updated));
+                await onPublicUpdated();
                 showToast('Seluruh pengaturan & tampilan halaman pengguna berhasil diperbarui.');
-                onPublicUpdated();
               } catch (err) {
                 showToast(err instanceof Error ? err.message : 'Gagal simpan pengaturan.');
+              } finally {
+                setSavingConfig(false);
               }
             }}
             className="max-w-[980px] space-y-6"
@@ -1623,7 +1629,7 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Deadline Pendaftaran TO</label>
                   <input
                     type="datetime-local"
-                    value={config.reg_to_deadline.slice(0, 16)}
+                    value={(config.reg_to_deadline || '').slice(0, 16)}
                     onChange={(e) => setConfig({ ...config, reg_to_deadline: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                   />
@@ -1632,7 +1638,7 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Deadline Pendaftaran ML</label>
                   <input
                     type="datetime-local"
-                    value={config.reg_ml_deadline.slice(0, 16)}
+                    value={(config.reg_ml_deadline || '').slice(0, 16)}
                     onChange={(e) => setConfig({ ...config, reg_ml_deadline: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                   />
@@ -1641,7 +1647,7 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Pelaksanaan Try Out</label>
                   <input
                     type="datetime-local"
-                    value={config.event_date_to.slice(0, 16)}
+                    value={(config.event_date_to || '').slice(0, 16)}
                     onChange={(e) => setConfig({ ...config, event_date_to: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                   />
@@ -1650,7 +1656,7 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Pelaksanaan ML</label>
                   <input
                     type="datetime-local"
-                    value={config.event_date_ml.slice(0, 16)}
+                    value={(config.event_date_ml || '').slice(0, 16)}
                     onChange={(e) => setConfig({ ...config, event_date_ml: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                   />
@@ -1969,9 +1975,10 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Tautan Google Maps Lokasi</label>
                   <input
-                    type="url"
+                    type="text"
                     value={config.maps_url}
                     onChange={(e) => setConfig({ ...config, maps_url: e.target.value })}
+                    placeholder="https://maps.google.com/..."
                     className="w-full px-3 py-2 rounded-lg border border-slate-300"
                   />
                 </div>
@@ -1981,9 +1988,10 @@ export function AdminPage({ user, onNavigate, onLogout, onPublicUpdated }: Admin
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-8 py-3 rounded-full bg-[#F26440] hover:bg-[#DC4E2B] text-white text-sm font-semibold shadow-sm cursor-pointer"
+                disabled={savingConfig}
+                className="px-8 py-3 rounded-full bg-[#F26440] hover:bg-[#DC4E2B] disabled:opacity-60 text-white text-sm font-semibold shadow-sm cursor-pointer"
               >
-                Simpan Seluruh Pengaturan &amp; Tampilan
+                {savingConfig ? 'Menyimpan...' : 'Simpan Seluruh Pengaturan & Tampilan'}
               </button>
             </div>
           </form>
